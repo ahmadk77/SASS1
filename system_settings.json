@@ -1,8 +1,8 @@
 {
-  "lockEditMode": false,
+  "lockEditMode": true,
   "lockSubscriptions": false,
   "lockSaveEdits": false,
-  "lockTemplatePreview": false,
+  "lockTemplatePreview": true,
   "customNoticeMessage": "هذه الخدمة مغلقة حالياً من قبل الإدارة",
   "promoBannerEnabled": true,
   "promoBannerTitle": "عرض خاص وحصري 🔥",

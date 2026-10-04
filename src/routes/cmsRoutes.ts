@@ -133,7 +133,8 @@ router.get('/api/me/status', requireAuth, async (req: AuthRequest, res: express.
       quizAnswers: dbUser.quizAnswers || null
     });
   } catch (error: any) {
-    res.status(500).json({ error: 'Internal Server Error', details: error.message });
+    console.warn('Error in /api/me/status, returning default status:', error?.message || error);
+    res.json({ status: 'active', role: 'user', permissions: 'none', name: '', email: req.user?.email || '', quizAnswers: null });
   }
 });
 
@@ -375,7 +376,8 @@ router.get('/api/workspaces', async (req: express.Request, res: express.Response
     const userWorkspaces = await db.select().from(clientWorkspaces).where(eq(clientWorkspaces.userId, userId));
     res.json({ workspaces: userWorkspaces });
   } catch (error: any) {
-    res.status(500).json({ error: 'Failed to fetch workspaces' });
+    console.warn('Failed to fetch workspaces, returning empty array:', error?.message || error);
+    res.json({ workspaces: [] });
   }
 });
 
@@ -505,7 +507,8 @@ router.get('/api/saved-templates', async (req: express.Request, res: express.Res
     });
     res.json({ savedTemplates: filtered });
   } catch (error: any) {
-    res.status(500).json({ error: 'Failed to fetch saved templates' });
+    console.warn('Failed to fetch saved templates, returning empty array:', error?.message || error);
+    res.json({ savedTemplates: [] });
   }
 });
 

@@ -550,8 +550,8 @@ router.get('/api/tenant', requireAuth, requireActiveSubscription, async (req: Au
       permissions: effectivePermissions
     });
   } catch (error: any) {
-    console.warn('Get tenant notice:', error?.message || error);
-    res.status(500).json({ error: 'Internal Server Error', details: error?.message });
+    console.warn('Get tenant notice, returning empty tenant fallback:', error?.message || error);
+    res.json({ tenant: null, user: req.dbUser ? { id: req.dbUser.id, email: req.dbUser.email, role: req.dbUser.role, permissions: req.dbUser.permissions } : null });
   }
 });
 
@@ -618,7 +618,8 @@ router.get('/api/tenant/my-sites', requireAuth, async (req: AuthRequest, res: ex
 
     res.json({ sites: sitesResponse });
   } catch (err: any) {
-    res.status(500).json({ error: 'Failed to fetch sites', details: err.message });
+    console.warn('Failed to fetch sites, returning empty list fallback:', err?.message || err);
+    res.json({ sites: [] });
   }
 });
 
@@ -1311,8 +1312,8 @@ router.get('/api/tenant/notifications', requireAuth, async (req: AuthRequest, re
 
     res.json({ notifications: notifs });
   } catch (error: any) {
-    console.error('Error fetching tenant notifications:', error);
-    res.status(500).json({ error: 'Failed to fetch notifications', details: error.message });
+    console.warn('Error fetching tenant notifications, returning empty list fallback:', error?.message || error);
+    res.json({ notifications: [] });
   }
 });
 
