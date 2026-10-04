@@ -209,13 +209,42 @@ async function startServer() {
     next();
   });
 
-  // Health and Database Diagnostics Endpoint
-  app.get('/api/health', async (req: express.Request, res: express.Response) => {
+  // Health and Database Diagnostics Endpoints
+  app.get(['/api/health', '/api/db-status'], async (req: express.Request, res: express.Response) => {
+    const startTime = Date.now();
     try {
-      await db.execute(sql`SELECT 1 as ok`);
-      res.json({ status: 'ok', database: 'connected', time: new Date() });
+      const pingResult = await db.execute(sql`SELECT current_database() as db_name, current_user as user_name, NOW() as current_time`);
+      const latencyMs = Date.now() - startTime;
+      const rows = (pingResult as any)?.rows || (Array.isArray(pingResult) ? pingResult : []);
+      const info = rows[0] || {};
+      
+      const rawUrl = process.env.DATABASE_URL || '';
+      let host = process.env.SQL_HOST ? 'Cloud SQL' : 'Unknown';
+      if (rawUrl) {
+        try {
+          const u = new URL(rawUrl);
+          host = u.hostname;
+        } catch {
+          host = rawUrl.split('@')[1]?.split('/')[0] || 'PostgreSQL';
+        }
+      }
+
+      res.json({
+        status: 'connected',
+        ok: true,
+        latencyMs,
+        database: info.db_name || process.env.SQL_DB_NAME || 'postgres',
+        user: info.user_name || 'postgres',
+        host,
+        timestamp: new Date()
+      });
     } catch (err: any) {
-      res.status(500).json({ status: 'error', database: 'disconnected', message: err?.message || String(err) });
+      res.status(500).json({
+        status: 'disconnected',
+        ok: false,
+        error: err?.message || String(err),
+        timestamp: new Date()
+      });
     }
   });
 
