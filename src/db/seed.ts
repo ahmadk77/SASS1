@@ -113,6 +113,22 @@ export async function seedDatabase() {
       );
     `).catch(() => {});
 
+    const templateColumns = [
+      `ALTER TABLE "templates" ADD COLUMN IF NOT EXISTS "name" TEXT NOT NULL DEFAULT ''`,
+      `ALTER TABLE "templates" ADD COLUMN IF NOT EXISTS "description" TEXT`,
+      `ALTER TABLE "templates" ADD COLUMN IF NOT EXISTS "type" TEXT NOT NULL DEFAULT 'native'`,
+      `ALTER TABLE "templates" ADD COLUMN IF NOT EXISTS "external_url" TEXT`,
+      `ALTER TABLE "templates" ADD COLUMN IF NOT EXISTS "category" TEXT NOT NULL DEFAULT 'general'`,
+      `ALTER TABLE "templates" ADD COLUMN IF NOT EXISTS "image" TEXT`,
+      `ALTER TABLE "templates" ADD COLUMN IF NOT EXISTS "default_content" JSONB NOT NULL DEFAULT '{}'`,
+      `ALTER TABLE "templates" ADD COLUMN IF NOT EXISTS "created_at" TIMESTAMP DEFAULT NOW()`,
+      `ALTER TABLE "templates" ADD COLUMN IF NOT EXISTS "assigned_user_email" TEXT`,
+      `ALTER TABLE "templates" ADD COLUMN IF NOT EXISTS "deleted_at" TIMESTAMP`
+    ];
+    for (const q of templateColumns) {
+      await db.execute(sql.raw(q)).catch(() => {});
+    }
+
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS "subscriptions" (
         "id" SERIAL PRIMARY KEY,
@@ -134,6 +150,12 @@ export async function seedDatabase() {
     `).catch(() => {});
 
     const subColumns = [
+      `ALTER TABLE "subscriptions" ADD COLUMN IF NOT EXISTS "plan" TEXT NOT NULL DEFAULT 'monthly'`,
+      `ALTER TABLE "subscriptions" ADD COLUMN IF NOT EXISTS "status" TEXT NOT NULL DEFAULT 'active'`,
+      `ALTER TABLE "subscriptions" ADD COLUMN IF NOT EXISTS "billing_cycle" TEXT`,
+      `ALTER TABLE "subscriptions" ADD COLUMN IF NOT EXISTS "trial_end" TIMESTAMP`,
+      `ALTER TABLE "subscriptions" ADD COLUMN IF NOT EXISTS "renewal_date" TIMESTAMP`,
+      `ALTER TABLE "subscriptions" ADD COLUMN IF NOT EXISTS "payment_provider" TEXT`,
       `ALTER TABLE "subscriptions" ADD COLUMN IF NOT EXISTS "has_custom_domain" BOOLEAN NOT NULL DEFAULT false`,
       `ALTER TABLE "subscriptions" ADD COLUMN IF NOT EXISTS "requested_domain_name" TEXT`,
       `ALTER TABLE "subscriptions" ADD COLUMN IF NOT EXISTS "total_price" INTEGER`,
@@ -157,6 +179,17 @@ export async function seedDatabase() {
       );
     `).catch(() => {});
 
+    const websiteColumns = [
+      `ALTER TABLE "websites" ADD COLUMN IF NOT EXISTS "tenant_id" INTEGER`,
+      `ALTER TABLE "websites" ADD COLUMN IF NOT EXISTS "template_id" INTEGER`,
+      `ALTER TABLE "websites" ADD COLUMN IF NOT EXISTS "created_at" TIMESTAMP DEFAULT NOW()`,
+      `ALTER TABLE "websites" ADD COLUMN IF NOT EXISTS "assigned_user_email" TEXT`,
+      `ALTER TABLE "websites" ADD COLUMN IF NOT EXISTS "deleted_at" TIMESTAMP`
+    ];
+    for (const q of websiteColumns) {
+      await db.execute(sql.raw(q)).catch(() => {});
+    }
+
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS "website_content" (
         "id" SERIAL PRIMARY KEY,
@@ -166,6 +199,16 @@ export async function seedDatabase() {
         "deleted_at" TIMESTAMP
       );
     `).catch(() => {});
+
+    const websiteContentColumns = [
+      `ALTER TABLE "website_content" ADD COLUMN IF NOT EXISTS "website_id" INTEGER`,
+      `ALTER TABLE "website_content" ADD COLUMN IF NOT EXISTS "content" JSONB NOT NULL DEFAULT '{}'`,
+      `ALTER TABLE "website_content" ADD COLUMN IF NOT EXISTS "updated_at" TIMESTAMP DEFAULT NOW()`,
+      `ALTER TABLE "website_content" ADD COLUMN IF NOT EXISTS "deleted_at" TIMESTAMP`
+    ];
+    for (const q of websiteContentColumns) {
+      await db.execute(sql.raw(q)).catch(() => {});
+    }
 
     // 3. Notifications, Staff Logs, Workspaces, Saved Templates
     await db.execute(sql`
@@ -378,6 +421,8 @@ export async function seedDatabase() {
   }
 
   try {
+    await ensureTemplateAndAssignmentColumns();
+
     const existingTemplates = await db.select().from(templates);
     const existingIds = new Set(existingTemplates.map(t => t.id));
 
@@ -697,5 +742,351 @@ export async function seedDatabase() {
     logger.info('Finished template verification and seeding!');
   } catch (error) {
     logger.error('Error seeding templates:', error);
+  }
+}
+
+export const defaultTemplates = [
+  {
+    id: 1,
+    name: 'قالب المطعم الإيطالي والفاخر',
+    description: 'تصميم ملكي راقي مخصص للمطاعم الفاخرة والفاين دايننج، يتيح للعملاء استعراض القائمة الفاخرة، الحجز الفوري للطاولات، وطلب الأطباق بأسلوب احترافي.',
+    type: 'native',
+    category: 'restaurants',
+    image: 'https://images.unsplash.com/photo-1514362545857-3bc16c4c7d1b?q=80&w=800',
+    defaultContent: {
+      logoUrl: 'https://placehold.co/150x50/e11d48/white?text=Logo',
+      siteName: 'ن',
+      heroTitle: 'تذوق أشهى الأطباق',
+      menuItems: [
+        { name: 'بيتزا مارغريتا', price: '45 ريال', description: 'صلصة طماطم، موزاريلا، ريحان' },
+        { name: 'برجر لحم كلاسيك', price: '35 ريال', description: 'لحم بقري، جبنة، خس، طماطم' },
+        { name: 'باستا ألفريدو', price: '40 ريال', description: 'دجاج، فطر، صلصة بيضاء' }
+      ],
+      businessName: 'مطعم الكلاسيك',
+      heroSubtitle: 'تجربة طعام لا تُنسى في قلب المدينة',
+      primaryColor: '#e11d48',
+      secondaryColor: '#f43f5e'
+    }
+  },
+  {
+    id: 2,
+    name: 'قالب برجر ستيشن للوجبات السريعة',
+    description: 'قالب حيوي وجذاب بمظهر عصري يبرز صور البرجر والوجبات السريعة مع نظام طلب سريع وعروض ترويجية مشهية.',
+    type: 'native',
+    category: 'restaurants',
+    image: 'https://images.unsplash.com/photo-1555939594-58d7cb561ad1?q=80&w=800',
+    defaultContent: {
+      heroTitle: 'طعم لا يُقاوم!',
+      metaTitle: 'برجر ستيشن - أشهى الوجبات',
+      textColor: '#1f2937',
+      fontFamily: 'Tajawal',
+      businessName: 'برجر ستيشن',
+      heroSubtitle: 'أسرع ديليفري وألذ برجر في المدينة، جربه الآن ولن تندم.',
+      primaryColor: '#ff4b2b',
+      secondaryColor: '#ffb100'
+    }
+  },
+  {
+    id: 3,
+    name: 'قالب بيتزا ووجبات عائلية',
+    description: 'واجهة متكاملة مخصصة لمطاعم البيتزا والوجبات العائلية مع خيارات مخصصة لتحديد أحجام البيتزا، الإضافات، والمشروبات.',
+    type: 'native',
+    category: 'restaurants',
+    image: 'https://images.unsplash.com/photo-1550547660-d9450f859349?q=80&w=800',
+    defaultContent: {
+      businessName: 'برجر وسوس',
+      heroTitle: 'وجبات سريعة دافية وطازجة!',
+      heroSubtitle: 'أسرع توصيل برجر وبيتزا مقرمشة في منطقتك، اطلب الآن واستمتع بالطعمة!',
+      primaryColor: '#ef4444',
+      secondaryColor: '#fef3c7',
+      textColor: '#1f2937',
+      fontFamily: 'Tajawal',
+      menuItems: [
+        { name: 'كلاسيك تشيز برجر', description: 'شريحة لحم بقري مشوية، جبنة شيدر، خس، طماطم، صوص برجر سبيشال', price: '25 ريال', category: 'برجر', image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?q=80&w=800' },
+        { name: 'دبل تربل برجر', description: 'شريحتين لحم أنجوس، جبنة شيدر مضاعفة، بصل مكرمل، صوص المدخن', price: '35 ريال', category: 'برجر', image: 'https://images.unsplash.com/photo-1568901346375-23c9450c58cd?q=80&w=800' },
+        { name: 'بيتزا بيبروني مميزة', description: 'صلصة طماطم إيطالية، جبنة موزاريلا غنية، قطع بيبروني بقري فاخر', price: '40 ريال', category: 'بيتزا', image: 'https://images.unsplash.com/photo-1628840042765-356cda07504e?q=80&w=800' },
+        { name: 'بطاطس بالجبنة والهلابينو', description: 'بطاطس مقلية ذهبية مغطاة بصلصة الجبنة الذائبة وشرائح الهلابينو الحارة', price: '15 ريال', category: 'مقبلات', image: 'https://images.unsplash.com/photo-1576107232684-1279f3908594?q=80&w=800' }
+      ]
+    }
+  },
+  {
+    id: 4,
+    name: 'قالب كافيه وقهوة كلاسيك',
+    description: 'تجربة دافئة لعشاق القهوة المختصة والحلويات، مع إبراز حبوب البن المحمصة، نكهات القهوة، وإمكانية الطلب المسبق.',
+    type: 'native',
+    category: 'restaurants',
+    image: 'https://images.unsplash.com/photo-1501339847302-ac426a4a7cbb?q=80&w=800',
+    defaultContent: {
+      businessName: 'كافيه روستري',
+      heroTitle: 'رائحة القهوة الأصيلة في كل صباح',
+      heroSubtitle: 'قهوة مختصة محضرة بعناية من أجود حبوب البن العالمية مع تشكيلة حلا طازجة.',
+      primaryColor: '#78350f',
+      secondaryColor: '#d97706'
+    }
+  },
+  {
+    id: 5,
+    name: 'قالب المخبز والحلويات الفرنسية',
+    description: 'واجهة شهية ومميزة للمخابز ومحلات الحلويات الفاخرة لعرض الكيك المخصص، الكرواسون، والمعجنات مع مواعيد الاستلام.',
+    type: 'native',
+    category: 'restaurants',
+    image: 'https://images.unsplash.com/photo-1509440159596-0249088772ff?q=80&w=800',
+    defaultContent: {
+      businessName: 'مخبز وحلويات لا باليت',
+      heroTitle: 'كرواسون طازج وحلويات فاخرة كل يوم',
+      heroSubtitle: 'معجنات وخبز فرنسي أصيل مخبوز بحب وشغف يومياً.',
+      primaryColor: '#c2410c',
+      secondaryColor: '#ea580c'
+    }
+  },
+  {
+    id: 6,
+    name: 'قالب متجر المشروبات والعصائر الطبيعية',
+    description: 'تصميم منعش بالألوان الحيوية لعرض العصائر الطازجة والسموذي الصحي وخلطات الديتوكس، مع طلبات سريعة وتوصيل مثلج.',
+    type: 'native',
+    category: 'restaurants',
+    image: 'https://images.unsplash.com/photo-1551024709-8f23befc6f87?q=80&w=800',
+    defaultContent: {
+      businessName: 'جوس بار المنعش',
+      heroTitle: 'انتعاش طبيعي 100% بدون إضافات',
+      heroSubtitle: 'عصائر فواكه طبيعية طازجة وخلطات سموذي مغذية تعيد لك الحيوية والنشاط.',
+      primaryColor: '#16a34a',
+      secondaryColor: '#22c55e'
+    }
+  },
+  {
+    id: 7,
+    name: 'قالب الفلل والقصور الفاخرة',
+    description: 'تصميم فخم واستثنائي مخصص للفلل الراقية والمجمعات السكنية المغلقة، مع جولات تصويرية ومعلومات تفصيلية عن التشطيبات والمساحات.',
+    type: 'native',
+    category: 'realestate',
+    image: 'https://images.unsplash.com/photo-1613977257363-707ba9348227?q=80&w=800',
+    defaultContent: {
+      businessName: 'مجموعة المروج العقارية',
+      heroTitle: 'امتلك منزل أحلامك بتصميم استثنائي',
+      heroSubtitle: 'نخبة الفلل والقصور والمشاريع السكنية الفاخرة مع تسهيلات تمويلية ميسرة.',
+      primaryColor: '#1e3a8a',
+      secondaryColor: '#3b82f6'
+    }
+  },
+  {
+    id: 8,
+    name: 'قالب الشقق والمجمعات السكنية',
+    description: 'واجهة هادئة وعملية لتصفح الشقق المتاحة للإيجار أو الشراء، مع تفاصيل المساحات، المرافق، والتواصل المباشر مع المالك.',
+    type: 'native',
+    category: 'realestate',
+    image: 'https://images.unsplash.com/photo-1522708323590-d24dbb6b0267?q=80&w=800',
+    defaultContent: {
+      businessName: 'أبراج النخبة السكنية',
+      heroTitle: 'حياة عصرية متكاملة المرافق',
+      heroSubtitle: 'شقق مفروشة وغير مفروشة في أفضل حي بالمدينة مع حراسة ومسبح.',
+      primaryColor: '#047857',
+      secondaryColor: '#10b981'
+    }
+  },
+  {
+    id: 9,
+    name: 'قالب المركز والمكتب العقاري الرسمي',
+    description: 'قالب مؤسسي رصين يعزز الثقة في خدمات إدارة الأملاك، التثمين العقاري، وتقديم الاستشارات الاستثمارية العقارية.',
+    type: 'native',
+    category: 'realestate',
+    image: 'https://images.unsplash.com/photo-1486406146926-c627a92ad1ab?q=80&w=800',
+    defaultContent: {
+      businessName: 'الوسيط العقاري المعتمد',
+      heroTitle: 'شريكك الموثوق في الاستثمار العقاري',
+      heroSubtitle: 'إدارة أملاك، تثمين، وبيع وشراء بأعلى عائد استثماري.',
+      primaryColor: '#334155',
+      secondaryColor: '#64748b'
+    }
+  },
+  {
+    id: 10,
+    name: 'قالب شركات المقاولات والبناء العام',
+    description: 'قالب مهني قوي يبرز المشاريع الإنشائية المنجزة، الخدمات الهندسية، أعمال البناء والتشطيبات الكبرى.',
+    type: 'native',
+    category: 'contractors',
+    image: 'https://images.unsplash.com/photo-1541888087611-37d45f3661eb?q=80&w=800',
+    defaultContent: {
+      businessName: 'شركة الإتقان للمقاولات',
+      heroTitle: 'نبني مستقبلك بأعلى معايير الجودة والهندسة',
+      heroSubtitle: 'تنفيذ كافة مشاريع البناء، التشطيب، والترميم بإشراف هندسي صارم.',
+      primaryColor: '#b45309',
+      secondaryColor: '#f59e0b'
+    }
+  },
+  {
+    id: 11,
+    name: 'قالب الاستشارات والتصميم المعماري',
+    description: 'تصميم عصري وفني يبرز الأفكار المعمارية المبتكرة والمخططات الهندسية ثلاثية الأبعاد 3D.',
+    type: 'native',
+    category: 'contractors',
+    image: 'https://images.unsplash.com/photo-1513694203232-719a280e022f?q=80&w=800',
+    defaultContent: {
+      businessName: 'استوديو أركيتكتشر الإبداعي',
+      heroTitle: 'نحول أفكارك إلى واقع معماري ينبض بالحياة',
+      heroSubtitle: 'تصاميم خارجية وداخلية مبتكرة تجمع بين الجمال والوظيفة.',
+      primaryColor: '#0f172a',
+      secondaryColor: '#38bdf8'
+    }
+  },
+  {
+    id: 12,
+    name: 'قالب التصميم الداخلي والتجديد',
+    description: 'يعرض أفكار الديكور المودرن والكلاسيك مع ميزة تفاعلية قبل وبعد التعديل (Before & After) لإبراز جودة التشطيبات.',
+    type: 'native',
+    category: 'contractors',
+    image: 'https://images.unsplash.com/photo-1600585154340-be6161a56a0c?q=80&w=800',
+    defaultContent: {
+      businessName: 'ديكور هوم للدصميم الداخلي',
+      heroTitle: 'فخامة الديكور العصري في كل زاوية',
+      heroSubtitle: 'نبتكر لك مساحات داخلية تعكس شخصيتك وتمنحك الراحة المطلقة.',
+      primaryColor: '#475569',
+      secondaryColor: '#94a3b8'
+    }
+  },
+  {
+    id: 13,
+    name: 'قالب أزياء وبوتيك فاخر (Haute Couture)',
+    description: 'متجر إلكتروني راقي للأزياء الفاخرة والإكسسوارات مع اختيار الألوان والمقاسات، عربة تسوق ذكية، وتتبع حالات الطلب بدقة.',
+    type: 'native',
+    category: 'fashion',
+    image: 'https://images.unsplash.com/photo-1490481651871-ab68de25d43d?q=80&w=800',
+    defaultContent: {
+      businessName: 'بوتيك الأزياء الراقية',
+      heroTitle: 'تصاميم تعكس ذوقك الرفيع',
+      heroSubtitle: 'استكشف أحدث تشكيلات الموضة الفاخرة مع تجربة تسوق استثنائية.',
+      primaryColor: '#000000',
+      secondaryColor: '#ffffff'
+    }
+  },
+  {
+    id: 14,
+    name: 'متجر الأجهزة الإلكترونية والتقنية',
+    description: 'متجر إلكتروني متكامل ومتطور لأحدث الهواتف الذكية، الحواسيب المحمولة، والإلكترونيات مع خيارات السعة، الألوان، ومساعد ذكي.',
+    type: 'native',
+    category: 'electronics',
+    image: 'https://images.unsplash.com/photo-1550745165-9bc0b252726f?q=80&w=800',
+    defaultContent: {
+      businessName: 'متجر الأجهزة الإلكترونية',
+      heroTitle: 'أحدث الأجهزة الذكية والتقنيات العصرية',
+      heroSubtitle: 'عالمك الذكي للتقنية الحديثة بضمان معتمد',
+      primaryColor: '#4f46e5',
+      secondaryColor: '#818cf8',
+      products: [
+        {
+          id: 1,
+          title: 'آيفون 16 برو ماكس - 256 جيجابايت',
+          price: 5399,
+          originalPrice: 5899,
+          category: 'الهواتف الذكية',
+          primaryImage: 'https://images.unsplash.com/photo-1695048133142-1a20484d2569?q=80&w=800',
+          colors: ['التيتانيوم الطبيعي', 'التيتانيوم الأسود', 'فضي معدني'],
+          storageOptions: ['256GB', '512GB', '1TB'],
+          description: 'شاشة Super Retina XDR مقاس 6.9 بوصة، معالج A18 Pro الخارق.'
+        },
+        {
+          id: 2,
+          title: 'ماك بوك برو 16 إنش - M3 Max',
+          price: 11499,
+          originalPrice: 12499,
+          category: 'الحواسيب',
+          primaryImage: 'https://images.unsplash.com/photo-1517336714731-489689fd1ca8?q=80&w=800',
+          colors: ['رمادي فلكي', 'فضي معدني'],
+          storageOptions: ['512GB SSD', '1TB SSD', '2TB SSD'],
+          description: 'أداء استثنائي للمحترفين والمصممين.'
+        }
+      ]
+    }
+  },
+  {
+    id: 15,
+    name: 'متجر العناية بالبشرة والجسم',
+    description: 'متجر جمالي متكامل لمنتجات العناية بالبشرة والجسم، مع ميزات التسوق السريع، إضافة للمفضلة، وتتبع حالة الطلبات والمنتجات الطبيعية.',
+    type: 'native',
+    category: 'beauty',
+    image: 'https://images.unsplash.com/photo-1556228578-0d85b1a4d571?q=80&w=800',
+    defaultContent: {
+      businessName: 'متجر العناية والجمال',
+      heroTitle: 'اكتشفي جمالك الطبيعي',
+      heroSubtitle: 'أفضل منتجات العناية بالبشرة والجسم بمكونات طبيعية 100% لبشرة مشرقة وصحية.',
+      primaryColor: '#e11d48',
+      secondaryColor: '#fb7185',
+      products: [
+        {
+          id: 1,
+          title: 'سيروم حمض الهيالورونيك',
+          price: 120,
+          originalPrice: 150,
+          category: 'العناية بالبشرة',
+          primaryImage: 'https://images.unsplash.com/photo-1620916566398-39f1143ab7be?q=80&w=800',
+          description: 'سيروم مرطب بعمق يعيد للبشرة حيويتها ونضارتها ويقلل من الخطوط الدقيقة.',
+          stock: 50,
+          inventoryStatus: 'متوفر'
+        }
+      ]
+    }
+  },
+  {
+    id: 16,
+    name: 'قالب عيادة الأسنان المتقدمة',
+    description: 'قالب طبي احترافي لعيادات ومراكز طب الأسنان يتيح للمرضى حجز المواعيد إلكترونياً، استعراض الخدمات الطبية، والتعرف على الفريق الطبي المتخصص.',
+    type: 'native',
+    category: 'medical',
+    image: 'https://images.unsplash.com/photo-1606811841689-23dfddce3e95?q=80&w=800',
+    defaultContent: {
+      businessName: 'عيادة الأسنان المتقدمة',
+      heroTitle: 'ابتسامتك، ثقتك',
+      heroSubtitle: 'رعاية أسنان استثنائية لابتسامة أكثر إشراقاً وصحة.',
+      primaryColor: '#0284c7',
+      secondaryColor: '#38bdf8'
+    }
+  }
+];
+
+export async function ensureTemplateAndAssignmentColumns() {
+  try {
+    const ddl = [
+      `CREATE TABLE IF NOT EXISTS "templates" ("id" SERIAL PRIMARY KEY, "name" TEXT NOT NULL, "description" TEXT, "type" TEXT NOT NULL DEFAULT 'native', "external_url" TEXT, "category" TEXT NOT NULL DEFAULT 'general', "image" TEXT, "default_content" JSONB NOT NULL DEFAULT '{}', "created_at" TIMESTAMP DEFAULT NOW(), "assigned_user_email" TEXT, "deleted_at" TIMESTAMP)`,
+      `ALTER TABLE "templates" ADD COLUMN IF NOT EXISTS "name" TEXT NOT NULL DEFAULT ''`,
+      `ALTER TABLE "templates" ADD COLUMN IF NOT EXISTS "description" TEXT`,
+      `ALTER TABLE "templates" ADD COLUMN IF NOT EXISTS "type" TEXT NOT NULL DEFAULT 'native'`,
+      `ALTER TABLE "templates" ADD COLUMN IF NOT EXISTS "external_url" TEXT`,
+      `ALTER TABLE "templates" ADD COLUMN IF NOT EXISTS "category" TEXT NOT NULL DEFAULT 'general'`,
+      `ALTER TABLE "templates" ADD COLUMN IF NOT EXISTS "image" TEXT`,
+      `ALTER TABLE "templates" ADD COLUMN IF NOT EXISTS "default_content" JSONB NOT NULL DEFAULT '{}'`,
+      `ALTER TABLE "templates" ADD COLUMN IF NOT EXISTS "created_at" TIMESTAMP DEFAULT NOW()`,
+      `ALTER TABLE "templates" ADD COLUMN IF NOT EXISTS "assigned_user_email" TEXT`,
+      `ALTER TABLE "templates" ADD COLUMN IF NOT EXISTS "deleted_at" TIMESTAMP`,
+      `CREATE TABLE IF NOT EXISTS "websites" ("id" SERIAL PRIMARY KEY, "tenant_id" INTEGER NOT NULL, "template_id" INTEGER NOT NULL, "created_at" TIMESTAMP DEFAULT NOW(), "assigned_user_email" TEXT, "deleted_at" TIMESTAMP)`,
+      `ALTER TABLE "websites" ADD COLUMN IF NOT EXISTS "tenant_id" INTEGER`,
+      `ALTER TABLE "websites" ADD COLUMN IF NOT EXISTS "template_id" INTEGER`,
+      `ALTER TABLE "websites" ADD COLUMN IF NOT EXISTS "created_at" TIMESTAMP DEFAULT NOW()`,
+      `ALTER TABLE "websites" ADD COLUMN IF NOT EXISTS "assigned_user_email" TEXT`,
+      `ALTER TABLE "websites" ADD COLUMN IF NOT EXISTS "deleted_at" TIMESTAMP`,
+      `CREATE TABLE IF NOT EXISTS "website_content" ("id" SERIAL PRIMARY KEY, "website_id" INTEGER NOT NULL, "content" JSONB NOT NULL DEFAULT '{}', "updated_at" TIMESTAMP DEFAULT NOW(), "deleted_at" TIMESTAMP)`,
+      `ALTER TABLE "website_content" ADD COLUMN IF NOT EXISTS "website_id" INTEGER`,
+      `ALTER TABLE "website_content" ADD COLUMN IF NOT EXISTS "content" JSONB NOT NULL DEFAULT '{}'`,
+      `ALTER TABLE "website_content" ADD COLUMN IF NOT EXISTS "updated_at" TIMESTAMP DEFAULT NOW()`,
+      `ALTER TABLE "website_content" ADD COLUMN IF NOT EXISTS "deleted_at" TIMESTAMP`,
+      `CREATE TABLE IF NOT EXISTS "subscriptions" ("id" SERIAL PRIMARY KEY, "tenant_id" INTEGER NOT NULL, "plan" TEXT NOT NULL DEFAULT 'monthly', "status" TEXT NOT NULL DEFAULT 'active', "billing_cycle" TEXT, "trial_end" TIMESTAMP, "renewal_date" TIMESTAMP, "payment_provider" TEXT, "has_custom_domain" BOOLEAN NOT NULL DEFAULT false, "requested_domain_name" TEXT, "total_price" INTEGER, "invoice_id" TEXT, "cancelled_at" TIMESTAMP, "created_at" TIMESTAMP DEFAULT NOW(), "assigned_user_email" TEXT)`,
+      `ALTER TABLE "subscriptions" ADD COLUMN IF NOT EXISTS "plan" TEXT NOT NULL DEFAULT 'monthly'`,
+      `ALTER TABLE "subscriptions" ADD COLUMN IF NOT EXISTS "status" TEXT NOT NULL DEFAULT 'active'`,
+      `ALTER TABLE "subscriptions" ADD COLUMN IF NOT EXISTS "billing_cycle" TEXT`,
+      `ALTER TABLE "subscriptions" ADD COLUMN IF NOT EXISTS "trial_end" TIMESTAMP`,
+      `ALTER TABLE "subscriptions" ADD COLUMN IF NOT EXISTS "renewal_date" TIMESTAMP`,
+      `ALTER TABLE "subscriptions" ADD COLUMN IF NOT EXISTS "payment_provider" TEXT`,
+      `ALTER TABLE "subscriptions" ADD COLUMN IF NOT EXISTS "has_custom_domain" BOOLEAN NOT NULL DEFAULT false`,
+      `ALTER TABLE "subscriptions" ADD COLUMN IF NOT EXISTS "requested_domain_name" TEXT`,
+      `ALTER TABLE "subscriptions" ADD COLUMN IF NOT EXISTS "total_price" INTEGER`,
+      `ALTER TABLE "subscriptions" ADD COLUMN IF NOT EXISTS "invoice_id" TEXT`,
+      `ALTER TABLE "subscriptions" ADD COLUMN IF NOT EXISTS "cancelled_at" TIMESTAMP`,
+      `ALTER TABLE "subscriptions" ADD COLUMN IF NOT EXISTS "created_at" TIMESTAMP DEFAULT NOW()`,
+      `ALTER TABLE "subscriptions" ADD COLUMN IF NOT EXISTS "assigned_user_email" TEXT`
+    ];
+    for (const statement of ddl) {
+      await db.execute(sql.raw(statement)).catch(() => {});
+    }
+  } catch (err) {
+    console.warn('ensureTemplateAndAssignmentColumns warning:', err);
   }
 }

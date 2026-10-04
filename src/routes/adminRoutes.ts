@@ -27,6 +27,7 @@ import { requireAuth, requireAdmin, requireSuperAdmin, AuthRequest } from '../mi
 import { adminAuth, firebaseEnabled } from '../lib/firebase-admin.ts';
 import { logger } from '../lib/logger.ts';
 import { getSystemSettings, updateSystemSettings } from '../lib/systemSettings.ts';
+import { defaultTemplates, ensureTemplateAndAssignmentColumns } from '../db/seed.ts';
 
 const router = express.Router();
 
@@ -253,11 +254,48 @@ router.post('/api/admin/assign-template', requireAuth, requireAdmin, async (req:
 
     const normalizedEmail = String(clientEmail).toLowerCase().trim();
 
-    const tplResult = await db.select().from(templates).where(eq(templates.id, numTemplateId));
-    if (tplResult.length === 0) {
-      return res.status(404).json({ error: 'Template not found' });
+    let template: any = null;
+    try {
+      const tplResult = await db.select().from(templates).where(eq(templates.id, numTemplateId));
+      if (tplResult.length > 0) {
+        template = tplResult[0];
+      }
+    } catch (tplErr: any) {
+      console.warn('Assign template select failed, repairing schema columns:', tplErr?.message);
+      await ensureTemplateAndAssignmentColumns();
+      try {
+        const tplResult = await db.select().from(templates).where(eq(templates.id, numTemplateId));
+        if (tplResult.length > 0) template = tplResult[0];
+      } catch (retryErr: any) {
+        console.warn('Retry template query failed:', retryErr?.message);
+      }
     }
-    const template = tplResult[0];
+
+    if (!template) {
+      const defaultTpl = defaultTemplates.find(t => t.id === numTemplateId);
+      if (defaultTpl) {
+        try {
+          await ensureTemplateAndAssignmentColumns();
+          const inserted = await db.insert(templates).values(defaultTpl).onConflictDoUpdate({
+            target: templates.id,
+            set: {
+              name: defaultTpl.name,
+              description: defaultTpl.description,
+              category: defaultTpl.category,
+              image: defaultTpl.image,
+              type: defaultTpl.type,
+              defaultContent: defaultTpl.defaultContent
+            }
+          }).returning();
+          template = inserted[0] || defaultTpl;
+        } catch (insErr: any) {
+          console.warn('Inserting fallback template failed, proceeding with in-memory template:', insErr?.message);
+          template = defaultTpl;
+        }
+      } else {
+        return res.status(404).json({ error: 'Template not found' });
+      }
+    }
 
     const staffEmail = getStaffEmail(req);
 
@@ -383,12 +421,16 @@ router.post('/api/admin/assign-template', requireAuth, requireAdmin, async (req:
         await tx.update(websites).set({ templateId: numTemplateId, assignedUserEmail: normalizedEmail }).where(eq(websites.id, websiteId));
       }
 
-      // Update template assignedUserEmail
-      await tx.update(templates)
-        .set({ 
-          assignedUserEmail: normalizedEmail,
-        })
-        .where(eq(templates.id, numTemplateId));
+      // Update template assignedUserEmail safely
+      try {
+        await tx.update(templates)
+          .set({ 
+            assignedUserEmail: normalizedEmail,
+          })
+          .where(eq(templates.id, numTemplateId));
+      } catch (tplUpErr: any) {
+        console.warn('Template assignedUserEmail update notice:', tplUpErr?.message);
+      }
 
       // Parse default content safely and wipe demo data for new client subscription
       let rawDefaultContent = template.defaultContent;
