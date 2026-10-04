@@ -1,0 +1,9 @@
+{
+  "name": "متجر الأجهزة الإلكترونية",
+  "description": "متجر إلكتروني متكامل لأحدث الأجهزة الذكية، الهواتف، الحواسيب المحمولة، والإلكترونيات مع سلة تسوق، دفع، ومساعد ذكي.",
+  "requestFramePermissions": [
+    "geolocation"
+  ],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
+

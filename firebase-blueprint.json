@@ -1,0 +1,50 @@
+{
+  "entities": {
+    "Workspace": {
+      "title": "Workspace",
+      "description": "Represents a user's website workspace and customizations.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "userId": { "type": "string" },
+        "name": { "type": "string" },
+        "templateId": { "type": "string" },
+        "customizations": { "type": "object" },
+        "updatedAt": { "type": "string", "format": "date-time" }
+      },
+      "required": ["userId", "customizations"]
+    },
+    "Product": {
+      "title": "Skincare Product",
+      "description": "Represents a skincare product, its price, skin type suitability, ingredients, and specs.",
+      "type": "object",
+      "properties": {
+        "id": { "type": "string" },
+        "title": { "type": "string" },
+        "category": { "type": "string" },
+        "skinType": { "type": "string" },
+        "price": { "type": "number" },
+        "originalPrice": { "type": "number" },
+        "stock": { "type": "number" },
+        "description": { "type": "string" },
+        "primaryImage": { "type": "string" },
+        "ingredients": {
+          "type": "array",
+          "items": { "type": "string" }
+        },
+        "specs": { "type": "object" }
+      },
+      "required": ["title", "price", "category"]
+    }
+  },
+  "firestore": {
+    "/workspaces/{workspaceId}": {
+      "schema": "Workspace",
+      "description": "User workspaces containing site customizations."
+    },
+    "/products/{productId}": {
+      "schema": "Product",
+      "description": "Products catalog including skincare items."
+    }
+  }
+}
