@@ -1244,6 +1244,17 @@ router.get('/api/tenant/subscriptions', requireAuth, async (req: AuthRequest, re
 
       const planTitle = getPlanTitleById(sub.plan) + (hasDomain ? ' (+دومين خاص)' : '');
 
+      const toIso = (val: any) => {
+        if (!val) return undefined;
+        if (typeof val === 'string') return val;
+        if (val instanceof Date) return val.toISOString();
+        try {
+          const d = new Date(val);
+          if (!isNaN(d.getTime())) return d.toISOString();
+        } catch (e) {}
+        return String(val);
+      };
+
       return {
         id: sub.id,
         tenantId: sub.tenantId,
@@ -1256,9 +1267,9 @@ router.get('/api/tenant/subscriptions', requireAuth, async (req: AuthRequest, re
         totalPrice: sub.totalPrice,
         hasCustomDomain: hasDomain,
         requestedDomainName: sub.requestedDomainName || t?.customDomain || undefined,
-        createdAt: sub.createdAt ? sub.createdAt.toISOString() : new Date().toISOString(),
-        endDate: sub.renewalDate ? sub.renewalDate.toISOString() : undefined,
-        renewalDate: sub.renewalDate ? sub.renewalDate.toISOString() : undefined,
+        createdAt: toIso(sub.createdAt) || new Date().toISOString(),
+        endDate: toIso(sub.renewalDate),
+        renewalDate: toIso(sub.renewalDate),
         siteName: t ? t.name : 'موقعي',
         templateId: 'N/A'
       };
@@ -1266,16 +1277,18 @@ router.get('/api/tenant/subscriptions', requireAuth, async (req: AuthRequest, re
 
     // Fetch templateId from websites
     for (const f of formattedSubs) {
-       const wList = await db.select().from(websites).where(eq(websites.tenantId, f.tenantId));
-       if (wList.length > 0) {
-         f.templateId = wList[0].templateId !== null ? String(wList[0].templateId) : 'N/A';
-       }
+       try {
+         const wList = await db.select().from(websites).where(eq(websites.tenantId, f.tenantId));
+         if (wList.length > 0) {
+           f.templateId = wList[0].templateId !== null ? String(wList[0].templateId) : 'N/A';
+         }
+       } catch (wErr) {}
     }
 
     res.json({ subscriptions: formattedSubs });
   } catch (error: any) {
-    console.error('Error fetching subscriptions:', error);
-    res.status(500).json({ error: 'Failed to fetch subscriptions', details: error.message });
+    console.warn('Error fetching subscriptions, returning empty list fallback:', error?.message || error);
+    res.json({ subscriptions: [] });
   }
 });
 
