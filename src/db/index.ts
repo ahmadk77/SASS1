@@ -50,26 +50,21 @@ export const createPool = () => {
   let dbUrl = process.env.DATABASE_URL;
 
   // Render detection & URL normalization
-  // If running inside Render container (process.env.RENDER === 'true'), internal host dpg-xxx-a is directly reachable without external SSL proxy
-  // If running outside Render (local dev or preview), convert dpg-xxx-a to external dpg-xxx-a.frankfurt-postgres.render.com
-  const isInsideRender = process.env.RENDER === 'true' || process.env.RENDER_SERVICE_ID !== undefined;
-
+  // Convert any bare internal hostname dpg-xxx-a into the fully qualified external hostname dpg-xxx-a.<region>-postgres.render.com
+  // This guarantees connectivity across different regions and prevents ENOTFOUND on Render internal DNS
   if (dbUrl) {
+    const region = process.env.RENDER_REGION || process.env.RENDER_INSTANCE_REGION || 'frankfurt';
     try {
       const parsed = new URL(dbUrl);
       if (parsed.hostname && parsed.hostname.startsWith('dpg-') && !parsed.hostname.includes('.render.com')) {
-        if (!isInsideRender) {
-          const region = process.env.RENDER_REGION || 'frankfurt';
-          parsed.hostname = `${parsed.hostname}.${region}-postgres.render.com`;
-          if (!parsed.searchParams.has('sslmode')) {
-            parsed.searchParams.set('sslmode', 'require');
-          }
-          dbUrl = parsed.toString();
+        parsed.hostname = `${parsed.hostname}.${region}-postgres.render.com`;
+        if (!parsed.searchParams.has('sslmode')) {
+          parsed.searchParams.set('sslmode', 'require');
         }
+        dbUrl = parsed.toString();
       }
     } catch (e) {
-      if (!isInsideRender && dbUrl.includes('dpg-') && !dbUrl.includes('.render.com')) {
-        const region = process.env.RENDER_REGION || 'frankfurt';
+      if (dbUrl.includes('dpg-') && !dbUrl.includes('.render.com')) {
         dbUrl = dbUrl.replace(/@dpg-([a-z0-9-]+)([:/?]|$)/i, `@dpg-$1.${region}-postgres.render.com$2`);
         if (!dbUrl.includes('sslmode=')) {
           dbUrl += (dbUrl.includes('?') ? '&' : '?') + 'sslmode=require';
