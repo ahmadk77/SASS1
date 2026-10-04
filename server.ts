@@ -39,7 +39,27 @@ const strictApiLimiter = rateLimit({
   message: { error: 'Too many requests for this endpoint, please slow down.' }
 });
 
+async function waitForDatabase(maxRetries = 10, delayMs = 500) {
+  for (let i = 0; i < maxRetries; i++) {
+    try {
+      await db.execute(sql`SELECT 1`);
+      logger.info('Database connection established successfully.');
+      return true;
+    } catch (err: any) {
+      if (i === maxRetries - 1) {
+        logger.warn('Database connection taking longer to establish, continuing in background:', err?.message || err);
+        return false;
+      }
+      await new Promise(r => setTimeout(r, delayMs));
+    }
+  }
+  return false;
+}
+
 async function startServer() {
+  // Wait for database readiness before executing migrations and queries
+  await waitForDatabase();
+
   // Seed Database on startup if empty
   await seedDatabase();
 
