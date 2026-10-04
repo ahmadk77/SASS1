@@ -208,6 +208,17 @@ async function startServer() {
     });
     next();
   });
+
+  // Health and Database Diagnostics Endpoint
+  app.get('/api/health', async (req: express.Request, res: express.Response) => {
+    try {
+      await db.execute(sql`SELECT 1 as ok`);
+      res.json({ status: 'ok', database: 'connected', time: new Date() });
+    } catch (err: any) {
+      res.status(500).json({ status: 'error', database: 'disconnected', message: err?.message || String(err) });
+    }
+  });
+
   app.use(tenantRoutes);
   app.use(adminRoutes);
   app.use(cmsRoutes);

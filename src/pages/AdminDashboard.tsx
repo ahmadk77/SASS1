@@ -266,6 +266,31 @@ export default function AdminDashboard() {
   });
   const [savingSysSettings, setSavingSysSettings] = useState(false);
 
+  // Live Database Health & Status State
+  const [dbStatusInfo, setDbStatusInfo] = useState<any>(null);
+  const [dbStatusLoading, setDbStatusLoading] = useState(false);
+
+  const fetchDbStatus = async () => {
+    setDbStatusLoading(true);
+    try {
+      const activeUser = user || auth.currentUser;
+      const token = activeUser ? await activeUser.getIdToken() : null;
+      const res = await fetch('/api/admin/system/db-status', {
+        headers: token ? { 'Authorization': `Bearer ${token}` } : {}
+      });
+      const data = await res.json();
+      setDbStatusInfo(data);
+    } catch (e: any) {
+      setDbStatusInfo({ status: 'error', error: e?.message || 'تعذر الاتصال' });
+    } finally {
+      setDbStatusLoading(false);
+    }
+  };
+
+  useEffect(() => {
+    fetchDbStatus();
+  }, []);
+
   useEffect(() => {
     fetchSystemSettings(true).then(s => setSysSettings(s));
     const unsubscribe = subscribeSystemSettings((s) => setSysSettings(s));
@@ -2897,13 +2922,52 @@ export default function AdminDashboard() {
                 {/* System Status Box */}
                 <div className="bg-slate-900/40 backdrop-blur-xl border border-slate-800/80 rounded-3xl p-8 shadow-2xl flex flex-col justify-between">
                   <div>
-                    <h3 className="text-xl font-bold text-white mb-4 flex items-center gap-2">
-                      <ShieldCheck className="w-5 h-5 text-emerald-400" />
-                      حالة الخوادم والربط
+                    <h3 className="text-xl font-bold text-white mb-4 flex items-center justify-between">
+                      <span className="flex items-center gap-2">
+                        <ShieldCheck className="w-5 h-5 text-emerald-400" />
+                        حالة الخوادم وقواعد البيانات
+                      </span>
+                      <button
+                        onClick={fetchDbStatus}
+                        disabled={dbStatusLoading}
+                        className="text-xs px-2.5 py-1 rounded-xl bg-slate-800 hover:bg-slate-700 text-slate-300 flex items-center gap-1.5 transition-colors border border-slate-700/60"
+                        title="إعادة فحص الاتصال بقاعدة البيانات"
+                      >
+                        <span className={dbStatusLoading ? 'animate-spin' : ''}>🔄</span>
+                        {dbStatusLoading ? 'جارِ الفحص...' : 'فحص الاتصال'}
+                      </button>
                     </h3>
-                    <div className="space-y-4">
+                    <div className="space-y-3">
+                      {/* Main PostgreSQL Database Status */}
+                      <div className="p-3.5 rounded-2xl bg-slate-900/80 border border-slate-800 text-xs">
+                        <div className="flex items-center justify-between">
+                          <span className="text-slate-300 font-semibold flex items-center gap-1.5">
+                            🐘 قاعدة البيانات (PostgreSQL):
+                          </span>
+                          <span className={`font-bold flex items-center gap-1.5 ${dbStatusInfo?.status === 'connected' ? 'text-emerald-400' : 'text-rose-400'}`}>
+                            <span className={`w-2 h-2 rounded-full ${dbStatusInfo?.status === 'connected' ? 'bg-emerald-400 animate-pulse' : 'bg-rose-400'}`}></span>
+                            {dbStatusInfo?.status === 'connected' ? 'متصلة وجاهزة' : dbStatusLoading ? 'جارِ الفحص...' : 'غير متصلة'}
+                          </span>
+                        </div>
+                        {dbStatusInfo?.status === 'connected' && (
+                          <div className="mt-2.5 pt-2.5 border-t border-slate-800/80 grid grid-cols-2 gap-y-1.5 gap-x-3 text-[11px]">
+                            <div className="text-slate-400">السيرفر: <span className="text-slate-200 font-mono text-[10px]">{dbStatusInfo.host}</span></div>
+                            <div className="text-slate-400">الاستجابة: <span className="text-emerald-300 font-bold">{dbStatusInfo.latencyMs}ms</span></div>
+                            <div className="text-slate-400">المستخدمين: <span className="text-blue-300 font-bold">{dbStatusInfo.counts?.users || 0}</span></div>
+                            <div className="text-slate-400">المتاجر: <span className="text-amber-300 font-bold">{dbStatusInfo.counts?.tenants || 0}</span></div>
+                            <div className="text-slate-400">القوالب: <span className="text-purple-300 font-bold">{dbStatusInfo.counts?.templates || 0}</span></div>
+                            <div className="text-slate-400">الاشتراكات: <span className="text-emerald-300 font-bold">{dbStatusInfo.counts?.subscriptions || 0}</span></div>
+                          </div>
+                        )}
+                        {dbStatusInfo?.status !== 'connected' && dbStatusInfo?.error && (
+                          <div className="mt-2 text-[10px] text-rose-400/90 leading-tight">
+                            {dbStatusInfo.error}
+                          </div>
+                        )}
+                      </div>
+
                       <div className="flex items-center justify-between p-3 rounded-2xl bg-slate-900/80 border border-slate-800 text-xs">
-                        <span className="text-slate-400">قاعدة البيانات (Firestore):</span>
+                        <span className="text-slate-400">قاعدة البيانات المساعدة (Firestore):</span>
                         <span className="text-emerald-400 font-bold flex items-center gap-1">
                           <span className="w-2 h-2 rounded-full bg-emerald-400 animate-pulse"></span>
                           متصلة

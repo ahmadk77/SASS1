@@ -1186,6 +1186,57 @@ router.delete(['/api/admin/system/staff/:id', '/api/admin/staff/:id'], requireAu
   }
 });
 
+router.get('/api/admin/system/db-status', requireAuth, requireAdmin, async (req: AuthRequest, res: express.Response) => {
+  const startTime = Date.now();
+  try {
+    const pingResult = await db.execute(sql`SELECT current_database() as db_name, current_user as user_name, NOW() as current_time`);
+    const latency = Date.now() - startTime;
+
+    const [userCountRes, tenantCountRes, templateCountRes, subCountRes] = await Promise.all([
+      db.select({ value: sql`count(*)` }).from(users).catch(() => [{ value: 0 }]),
+      db.select({ value: sql`count(*)` }).from(tenants).catch(() => [{ value: 0 }]),
+      db.select({ value: sql`count(*)` }).from(templates).catch(() => [{ value: 0 }]),
+      db.select({ value: sql`count(*)` }).from(subscriptions).catch(() => [{ value: 0 }])
+    ]);
+
+    const rows = (pingResult as any)?.rows || (Array.isArray(pingResult) ? pingResult : []);
+    const info = rows[0] || {};
+    
+    const rawUrl = process.env.DATABASE_URL || '';
+    let host = process.env.SQL_HOST ? 'Cloud SQL' : 'Unknown';
+    if (rawUrl) {
+      try {
+        const u = new URL(rawUrl);
+        host = u.hostname;
+      } catch (e) {
+        host = rawUrl.split('@')[1]?.split('/')[0] || 'PostgreSQL';
+      }
+    }
+
+    res.json({
+      status: 'connected',
+      latencyMs: latency,
+      database: info.db_name || process.env.SQL_DB_NAME || 'postgres',
+      user: info.user_name || 'postgres',
+      host,
+      counts: {
+        users: Number(userCountRes[0]?.value || 0),
+        tenants: Number(tenantCountRes[0]?.value || 0),
+        templates: Number(templateCountRes[0]?.value || 0),
+        subscriptions: Number(subCountRes[0]?.value || 0)
+      },
+      serverTime: info.current_time || new Date()
+    });
+  } catch (error: any) {
+    res.status(500).json({
+      status: 'disconnected',
+      error: error?.message || String(error),
+      host: process.env.SQL_HOST ? 'Cloud SQL' : 'Render PostgreSQL',
+      recommendation: 'تأكد من تشغيل قاعدة البيانات على Render وأنها ليست معلقة (Suspended) وتأكد من صحة DATABASE_URL.'
+    });
+  }
+});
+
 router.get(['/api/admin/system/logs', '/api/admin/logs'], requireAuth, requireAdmin, async (req: AuthRequest, res: express.Response) => {
   try {
     const logs = await db.select().from(staffLogs).orderBy(desc(staffLogs.createdAt)).limit(100);
