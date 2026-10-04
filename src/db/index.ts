@@ -192,6 +192,11 @@ const originalPoolConnect = pool.connect.bind(pool);
         // Safely validate socket state
         const stream = (client as any)?.stream || (client as any)?.connection?.stream;
         if (stream && stream.destroyed) {
+          try {
+            if (typeof client.release === 'function') client.release(true);
+          } catch (e) {
+            // ignore release error
+          }
           purgeDeadPoolClients(pool);
           retries--;
           continue;

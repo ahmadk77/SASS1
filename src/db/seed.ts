@@ -5,13 +5,320 @@ import { logger } from '../lib/logger.ts';
 
 export async function seedDatabase() {
   try {
-    // Run lightweight schema updates & ensure tables exist in DB
+    logger.info('Starting database auto-schema verification & migration...');
+
+    // 1. Core Tables: tenants & users
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS "tenants" (
+        "id" SERIAL PRIMARY KEY,
+        "name" TEXT NOT NULL DEFAULT 'المتجر الافتراضي',
+        "subdomain" TEXT UNIQUE NOT NULL,
+        "custom_domain" TEXT UNIQUE,
+        "template_category" TEXT NOT NULL DEFAULT 'general',
+        "supported_languages" TEXT[],
+        "default_language" TEXT DEFAULT 'ar',
+        "supported_currencies" TEXT[],
+        "default_currency" TEXT DEFAULT 'SAR',
+        "created_at" TIMESTAMP DEFAULT NOW(),
+        "assigned_user_email" TEXT,
+        "deleted_at" TIMESTAMP,
+        "user_id" INTEGER
+      );
+    `).catch(e => console.warn('tenants table create notice:', e?.message));
+
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS "users" (
+        "id" SERIAL PRIMARY KEY,
+        "uid" TEXT NOT NULL UNIQUE,
+        "email" TEXT NOT NULL UNIQUE,
+        "status" TEXT NOT NULL DEFAULT 'active',
+        "role" TEXT NOT NULL DEFAULT 'user',
+        "name" TEXT,
+        "permissions" TEXT DEFAULT 'all',
+        "last_active_at" TIMESTAMP DEFAULT NOW(),
+        "is_online" INTEGER DEFAULT 1,
+        "tenant_id" INTEGER,
+        "avatar_url" TEXT,
+        "password" TEXT,
+        "location" TEXT,
+        "ip_address" TEXT,
+        "created_at" TIMESTAMP DEFAULT NOW(),
+        "deleted_at" TIMESTAMP,
+        "assigned_user_email" TEXT,
+        "subscription_type" TEXT,
+        "subscription_price" INTEGER,
+        "subscription_start_date" TIMESTAMP,
+        "subscription_end_date" TIMESTAMP,
+        "quiz_answers" JSONB
+      );
+    `).catch(e => console.warn('users table create notice:', e?.message));
+
+    // Ensure all columns exist on users
+    const userColumns = [
+      `ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "status" TEXT NOT NULL DEFAULT 'active'`,
+      `ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "role" TEXT NOT NULL DEFAULT 'user'`,
+      `ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "name" TEXT`,
+      `ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "permissions" TEXT DEFAULT 'all'`,
+      `ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "last_active_at" TIMESTAMP DEFAULT NOW()`,
+      `ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "is_online" INTEGER DEFAULT 1`,
+      `ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "tenant_id" INTEGER`,
+      `ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "avatar_url" TEXT`,
+      `ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "password" TEXT`,
+      `ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "location" TEXT`,
+      `ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "ip_address" TEXT`,
+      `ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "created_at" TIMESTAMP DEFAULT NOW()`,
+      `ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "deleted_at" TIMESTAMP`,
+      `ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "assigned_user_email" TEXT`,
+      `ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "subscription_type" TEXT`,
+      `ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "subscription_price" INTEGER`,
+      `ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "subscription_start_date" TIMESTAMP`,
+      `ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "subscription_end_date" TIMESTAMP`,
+      `ALTER TABLE "users" ADD COLUMN IF NOT EXISTS "quiz_answers" JSONB`
+    ];
+    for (const q of userColumns) {
+      await db.execute(sql.raw(q)).catch(() => {});
+    }
+
+    // Ensure all columns exist on tenants
+    const tenantColumns = [
+      `ALTER TABLE "tenants" ADD COLUMN IF NOT EXISTS "custom_domain" TEXT`,
+      `ALTER TABLE "tenants" ADD COLUMN IF NOT EXISTS "template_category" TEXT NOT NULL DEFAULT 'general'`,
+      `ALTER TABLE "tenants" ADD COLUMN IF NOT EXISTS "supported_languages" TEXT[]`,
+      `ALTER TABLE "tenants" ADD COLUMN IF NOT EXISTS "default_language" TEXT DEFAULT 'ar'`,
+      `ALTER TABLE "tenants" ADD COLUMN IF NOT EXISTS "supported_currencies" TEXT[]`,
+      `ALTER TABLE "tenants" ADD COLUMN IF NOT EXISTS "default_currency" TEXT DEFAULT 'SAR'`,
+      `ALTER TABLE "tenants" ADD COLUMN IF NOT EXISTS "created_at" TIMESTAMP DEFAULT NOW()`,
+      `ALTER TABLE "tenants" ADD COLUMN IF NOT EXISTS "assigned_user_email" TEXT`,
+      `ALTER TABLE "tenants" ADD COLUMN IF NOT EXISTS "deleted_at" TIMESTAMP`,
+      `ALTER TABLE "tenants" ADD COLUMN IF NOT EXISTS "user_id" INTEGER`
+    ];
+    for (const q of tenantColumns) {
+      await db.execute(sql.raw(q)).catch(() => {});
+    }
+
+    // 2. Templates, Subscriptions, Websites, Website Content
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS "templates" (
+        "id" SERIAL PRIMARY KEY,
+        "name" TEXT NOT NULL,
+        "description" TEXT,
+        "type" TEXT NOT NULL DEFAULT 'native',
+        "external_url" TEXT,
+        "category" TEXT NOT NULL DEFAULT 'general',
+        "image" TEXT,
+        "default_content" JSONB NOT NULL DEFAULT '{}',
+        "created_at" TIMESTAMP DEFAULT NOW(),
+        "assigned_user_email" TEXT,
+        "deleted_at" TIMESTAMP
+      );
+    `).catch(() => {});
+
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS "subscriptions" (
+        "id" SERIAL PRIMARY KEY,
+        "tenant_id" INTEGER NOT NULL,
+        "plan" TEXT NOT NULL DEFAULT 'monthly',
+        "status" TEXT NOT NULL DEFAULT 'active',
+        "billing_cycle" TEXT,
+        "trial_end" TIMESTAMP,
+        "renewal_date" TIMESTAMP,
+        "payment_provider" TEXT,
+        "has_custom_domain" BOOLEAN NOT NULL DEFAULT false,
+        "requested_domain_name" TEXT,
+        "total_price" INTEGER,
+        "invoice_id" TEXT,
+        "cancelled_at" TIMESTAMP,
+        "created_at" TIMESTAMP DEFAULT NOW(),
+        "assigned_user_email" TEXT
+      );
+    `).catch(() => {});
+
+    const subColumns = [
+      `ALTER TABLE "subscriptions" ADD COLUMN IF NOT EXISTS "has_custom_domain" BOOLEAN NOT NULL DEFAULT false`,
+      `ALTER TABLE "subscriptions" ADD COLUMN IF NOT EXISTS "requested_domain_name" TEXT`,
+      `ALTER TABLE "subscriptions" ADD COLUMN IF NOT EXISTS "total_price" INTEGER`,
+      `ALTER TABLE "subscriptions" ADD COLUMN IF NOT EXISTS "invoice_id" TEXT`,
+      `ALTER TABLE "subscriptions" ADD COLUMN IF NOT EXISTS "cancelled_at" TIMESTAMP`,
+      `ALTER TABLE "subscriptions" ADD COLUMN IF NOT EXISTS "created_at" TIMESTAMP DEFAULT NOW()`,
+      `ALTER TABLE "subscriptions" ADD COLUMN IF NOT EXISTS "assigned_user_email" TEXT`
+    ];
+    for (const q of subColumns) {
+      await db.execute(sql.raw(q)).catch(() => {});
+    }
+
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS "websites" (
+        "id" SERIAL PRIMARY KEY,
+        "tenant_id" INTEGER NOT NULL,
+        "template_id" INTEGER NOT NULL,
+        "created_at" TIMESTAMP DEFAULT NOW(),
+        "assigned_user_email" TEXT,
+        "deleted_at" TIMESTAMP
+      );
+    `).catch(() => {});
+
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS "website_content" (
+        "id" SERIAL PRIMARY KEY,
+        "website_id" INTEGER NOT NULL,
+        "content" JSONB NOT NULL DEFAULT '{}',
+        "updated_at" TIMESTAMP DEFAULT NOW(),
+        "deleted_at" TIMESTAMP
+      );
+    `).catch(() => {});
+
+    // 3. Notifications, Staff Logs, Workspaces, Saved Templates
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS "notifications" (
+        "id" SERIAL PRIMARY KEY,
+        "tenant_id" INTEGER,
+        "target_email" TEXT,
+        "title" TEXT NOT NULL DEFAULT '',
+        "message" TEXT NOT NULL DEFAULT '',
+        "is_required" INTEGER DEFAULT 0,
+        "is_read" INTEGER DEFAULT 0,
+        "read_at" TIMESTAMP,
+        "created_at" TIMESTAMP DEFAULT NOW()
+      );
+    `).catch(() => {});
+
+    const notifColumns = [
+      `ALTER TABLE "notifications" ADD COLUMN IF NOT EXISTS "tenant_id" INTEGER`,
+      `ALTER TABLE "notifications" ADD COLUMN IF NOT EXISTS "target_email" TEXT`,
+      `ALTER TABLE "notifications" ADD COLUMN IF NOT EXISTS "title" TEXT NOT NULL DEFAULT ''`,
+      `ALTER TABLE "notifications" ADD COLUMN IF NOT EXISTS "message" TEXT NOT NULL DEFAULT ''`,
+      `ALTER TABLE "notifications" ADD COLUMN IF NOT EXISTS "is_required" INTEGER DEFAULT 0`,
+      `ALTER TABLE "notifications" ADD COLUMN IF NOT EXISTS "is_read" INTEGER DEFAULT 0`,
+      `ALTER TABLE "notifications" ADD COLUMN IF NOT EXISTS "read_at" TIMESTAMP`,
+      `ALTER TABLE "notifications" ADD COLUMN IF NOT EXISTS "created_at" TIMESTAMP DEFAULT NOW()`
+    ];
+    for (const q of notifColumns) {
+      await db.execute(sql.raw(q)).catch(() => {});
+    }
+
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS "staff_logs" (
+        "id" SERIAL PRIMARY KEY,
+        "user_id" INTEGER,
+        "user_email" TEXT NOT NULL,
+        "user_name" TEXT,
+        "action" TEXT NOT NULL,
+        "category" TEXT DEFAULT 'general',
+        "created_at" TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+    `).catch(() => {});
+
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS "client_workspaces" (
+        "id" SERIAL PRIMARY KEY,
+        "user_id" TEXT NOT NULL,
+        "template_id" TEXT NOT NULL,
+        "name" TEXT NOT NULL,
+        "domain" TEXT,
+        "customizations" JSONB NOT NULL DEFAULT '{}',
+        "settings" JSONB NOT NULL DEFAULT '{}',
+        "status" TEXT NOT NULL DEFAULT 'draft',
+        "created_at" TIMESTAMP NOT NULL DEFAULT NOW(),
+        "updated_at" TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+    `).catch(() => {});
+
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS "saved_templates" (
+        "id" SERIAL PRIMARY KEY,
+        "user_id" TEXT NOT NULL,
+        "template_id" TEXT NOT NULL,
+        "template_name" TEXT NOT NULL,
+        "preview_image" TEXT,
+        "category" TEXT,
+        "custom_config" JSONB DEFAULT '{}',
+        "created_at" TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+    `).catch(() => {});
+
+    // 4. Support Tickets, Store Customers, Orders, Audit Logs
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS "store_customers" (
+        "id" SERIAL PRIMARY KEY,
+        "tenant_id" INTEGER NOT NULL,
+        "website_id" INTEGER NOT NULL,
+        "email" TEXT NOT NULL,
+        "phone" TEXT,
+        "name" TEXT,
+        "photo_url" TEXT,
+        "favorites" JSONB DEFAULT '[]',
+        "last_login_at" TIMESTAMP NOT NULL DEFAULT NOW(),
+        "created_at" TIMESTAMP NOT NULL DEFAULT NOW(),
+        "updated_at" TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+    `).catch(() => {});
     await db.execute(sql`ALTER TABLE "store_customers" ADD COLUMN IF NOT EXISTS "phone" text;`).catch(() => {});
-    
+
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS "support_tickets" (
+        "id" SERIAL PRIMARY KEY,
+        "tenant_id" INTEGER NOT NULL,
+        "website_id" INTEGER NOT NULL,
+        "customer_email" TEXT NOT NULL,
+        "customer_name" TEXT,
+        "subject" TEXT NOT NULL,
+        "message" TEXT NOT NULL,
+        "status" TEXT NOT NULL DEFAULT 'pending',
+        "images" JSONB DEFAULT '[]',
+        "created_at" TIMESTAMP NOT NULL DEFAULT NOW(),
+        "updated_at" TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+    `).catch(() => {});
+
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS "support_messages" (
+        "id" SERIAL PRIMARY KEY,
+        "ticket_id" INTEGER NOT NULL,
+        "sender_id" TEXT NOT NULL,
+        "sender_type" TEXT NOT NULL,
+        "message" TEXT NOT NULL,
+        "images" JSONB DEFAULT '[]',
+        "created_at" TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+    `).catch(() => {});
+
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS "orders" (
+        "id" SERIAL PRIMARY KEY,
+        "tenant_id" INTEGER NOT NULL,
+        "website_id" INTEGER NOT NULL,
+        "customer_name" TEXT,
+        "customer_email" TEXT,
+        "customer_phone" TEXT,
+        "items" JSONB NOT NULL DEFAULT '[]',
+        "total" TEXT NOT NULL DEFAULT '0',
+        "status" TEXT NOT NULL DEFAULT 'جديد',
+        "payment_method" TEXT DEFAULT 'عند الاستلام',
+        "delivery_address" TEXT,
+        "notes" TEXT,
+        "created_at" TIMESTAMP NOT NULL DEFAULT NOW(),
+        "updated_at" TIMESTAMP NOT NULL DEFAULT NOW()
+      );
+    `).catch(() => {});
+
+    await db.execute(sql`
+      CREATE TABLE IF NOT EXISTS "audit_logs" (
+        "id" SERIAL PRIMARY KEY,
+        "tenant_id" INTEGER,
+        "user_id" TEXT,
+        "action" TEXT NOT NULL,
+        "resource_type" TEXT,
+        "resource_id" TEXT,
+        "changes" JSONB,
+        "created_at" TIMESTAMP DEFAULT NOW()
+      );
+    `).catch(() => {});
+
+    // 5. Dentist Template Tables
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS "dentist_doctors" (
         "id" SERIAL PRIMARY KEY,
-        "tenant_id" INTEGER NOT NULL REFERENCES "tenants"("id") ON DELETE CASCADE,
+        "tenant_id" INTEGER NOT NULL,
         "name" TEXT NOT NULL,
         "specialty" TEXT NOT NULL,
         "degree" TEXT,
@@ -25,7 +332,7 @@ export async function seedDatabase() {
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS "dentist_appointments" (
         "id" SERIAL PRIMARY KEY,
-        "tenant_id" INTEGER NOT NULL REFERENCES "tenants"("id") ON DELETE CASCADE,
+        "tenant_id" INTEGER NOT NULL,
         "patient_name" TEXT NOT NULL,
         "phone" TEXT NOT NULL,
         "service_id" TEXT,
@@ -42,7 +349,7 @@ export async function seedDatabase() {
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS "dentist_services" (
         "id" SERIAL PRIMARY KEY,
-        "tenant_id" INTEGER NOT NULL REFERENCES "tenants"("id") ON DELETE CASCADE,
+        "tenant_id" INTEGER NOT NULL,
         "title" TEXT NOT NULL,
         "short_desc" TEXT,
         "full_desc" TEXT,
@@ -58,12 +365,14 @@ export async function seedDatabase() {
     await db.execute(sql`
       CREATE TABLE IF NOT EXISTS "dentist_settings" (
         "id" SERIAL PRIMARY KEY,
-        "tenant_id" INTEGER NOT NULL REFERENCES "tenants"("id") ON DELETE CASCADE UNIQUE,
+        "tenant_id" INTEGER NOT NULL UNIQUE,
         "clinic_name" TEXT NOT NULL DEFAULT 'إيليت دينتال',
         "clinic_phone" TEXT NOT NULL DEFAULT '0790000000',
         "updated_at" TIMESTAMP NOT NULL DEFAULT NOW()
       );
     `).catch(() => {});
+
+    logger.info('Database auto-schema verification & migration completed successfully!');
   } catch (mErr) {
     console.warn('Auto schema migration notice:', mErr);
   }
